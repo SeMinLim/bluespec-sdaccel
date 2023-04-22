@@ -4,11 +4,20 @@ import Axi4MemoryMaster::*;
 import Vector::*;
 import Clocks :: *;
 
+import KernelMain::*;
+import Cache::*;
+
 interface KernelTopIfc;
 	(* always_ready *)
 	interface Axi4MemoryMasterPinsIfc#(64,512) m00_axi;
 	(* always_ready *)
 	interface Axi4MemoryMasterPinsIfc#(64,512) m01_axi;
+	/*
+	(* always_ready *)
+	interface Axi4MemoryMasterPinsIfc#(64,512) m02_axi;
+	(* always_ready *)
+	interface Axi4MemoryMasterPinsIfc#(64,512) m03_axi;
+	*/
 	(* always_ready *)
 	interface Axi4LiteControllerXrtPinsIfc#(12,32) s_axi_control;
 	(* always_ready *)
@@ -25,18 +34,48 @@ module mkKernelTop (KernelTopIfc);
 	Vector#(2, Axi4MemoryMasterIfc#(64,512)) axi4mem <- replicateM(mkAxi4MemoryMaster);
 	//Axi4MemoryMasterIfc#(64,512) axi4file <- mkAxi4MemoryMaster;
 
+/*
 	Reg#(Bool) started <- mkReg(False);
 	Reg#(Bool) done <- mkReg(False);
 	rule checkscalar ( started == False );
 		if ( axi4control.ap_start ) started <= True;
 	endrule
-
+*/
 	Reg#(Bit#(32)) cycleCounter <- mkReg(0);
 	rule incCycle;
 		cycleCounter <= cycleCounter + 1;
 	endrule
 
 
+	KernelMainIfc kernelMain <- mkKernelMain;
+	rule checkStart;
+		if ( axi4control.ap_start ) kernelMain.start(axi4control.scalar00);
+	endrule
+	rule checkDone;
+		kernelMain.done;
+		axi4control.ap_done();
+	endrule
+	for ( Integer i = 0; i < valueOf(MemPortCnt); i=i+1 ) begin
+		rule relayReadReq00;
+			let r <- kernelMain.mem[i].readReq;
+			axi4mem[i].readReq(r.addr,zeroExtend(r.bytes));
+		endrule
+		rule relayWriteReq;
+			let r <- kernelMain.mem[i].writeReq;
+			axi4mem[i].writeReq(r.addr,zeroExtend(r.bytes));
+		endrule
+		rule relayWriteWord;
+			let r <- kernelMain.mem[i].writeWord;
+			axi4mem[i].write(r);
+		endrule
+		rule relayReadWord;
+			let d <- axi4mem[i].read;
+			kernelMain.mem[i].readWord(d);
+		endrule
+	end
+
+
+/*
 	Reg#(Bit#(32)) readReqCycle <- mkReg(0);
 	Reg#(Bit#(32)) testCounter <- mkReg(0);
 	rule issueWork(started && testCounter == 0 && !done);
@@ -44,6 +83,9 @@ module mkKernelTop (KernelTopIfc);
 			//axi4mem.writeReq(axi4control.mem_addr,zeroExtend(axi4control.scalar00)<<6); // 512 bits
 			axi4mem[0].readReq(axi4control.mem_addr,zeroExtend(axi4control.scalar00)<<6); // 512 bits
 			for ( Integer i = 1; i< 2; i=i+1) begin
+				axi4mem[i].writeReq(axi4control.mem_addr,zeroExtend(axi4control.scalar00)<<6);
+			end
+			for ( Integer i = 2; i< 4; i=i+1) begin
 				axi4mem[i].writeReq(axi4control.file_addr,zeroExtend(axi4control.scalar00)<<6);
 			end
 
@@ -57,7 +99,7 @@ module mkKernelTop (KernelTopIfc);
 
 	rule readBurst(testCounter != 0 && started == True);
 		let d <- axi4mem[0].read;
-		for ( Integer i = 1; i< 2; i=i+1) begin
+		for ( Integer i = 1; i< 4; i=i+1) begin
 			axi4mem[i].write(d);
 		end
 
@@ -79,9 +121,12 @@ module mkKernelTop (KernelTopIfc);
 			});
 		end
 	endrule
+	*/
 
 	interface m00_axi = axi4mem[0].pins;
 	interface m01_axi = axi4mem[1].pins;
+	//interface m02_axi = axi4mem[2].pins;
+	//interface m03_axi = axi4mem[3].pins;
 	interface s_axi_control = axi4control.pins;
 	interface interrupt = axi4control.interrupt;
 endmodule

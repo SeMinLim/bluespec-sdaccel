@@ -1,6 +1,7 @@
 *.sw?
 obj
 *.log
+.o
 _x
 /host
 .run
