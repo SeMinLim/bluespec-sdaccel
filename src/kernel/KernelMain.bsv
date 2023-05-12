@@ -33,7 +33,7 @@ module mkKernelMain(KernelMainIfc);
 	//////////////////////////////////////////////////////////////////////////
 
 	ProcessorIfc processor <- mkProcessor;
-	Vector#(2, CacheIfc#(12)) caches;
+	Vector#(2, CacheIfc#(10)) caches;
 	caches[0] <- mkCacheDirect(False);
 	caches[1] <- mkCacheDirect(True);
 	//CacheIfc#(32,12,4) iCache <- mkCacheDirect;

@@ -14,15 +14,20 @@ typedef struct {
 
 
 typedef 512 DramWordBits;
-typedef TDiv#(DramWordBits, 32) CacheLineWords;
+//typedef 1 CacheLinesPerDramWord;
+//typedef TDiv#(DramWordBits, CacheLinesPerDramWord) CacheLineBits;
+typedef DramWordBits CacheLineBits;
+typedef TDiv#(CacheLineBits, 32) CacheLineWords;
 typedef TLog#(CacheLineWords) CacheLineWordsSz;
 
 typedef 32 AddrSz;
 
+/*
 function Bit#(32) reverseEndian(Bit#(32) word);
 	Bit#(32) nw = {word[7:0], word[15:8], word[23:16], word[31:24]};
 	return nw;
 endfunction
+*/
 
 interface CacheIfc#(numeric type cacheRowCntSz );
 	method Action cacheReq(MemReq32 req);
@@ -48,10 +53,30 @@ module mkCacheDirect#(Bool verbose) (CacheIfc#(cacheRowCntSz))
 	ScoreboardIfc#(16) sb <- mkScoreboard;
 	// tag, words, valid, dirty
 	BRAM2Port#(Bit#(cacheRowCntSz), Tuple4#(Bit#(tagSz), Vector#(TExp#(CacheLineWordsSz), Word),Bool,Bool)) mem <- mkBRAM2Server(defaultValue); 
+	Vector#(2,FIFO#(BRAMRequest#(Bit#(cacheRowCntSz),Tuple4#(Bit#(tagSz), Vector#(TExp#(CacheLineWordsSz), Word),Bool,Bool)))) memReqQs <- replicateM(mkFIFO);
+	Vector#(2,FIFO#(Tuple4#(Bit#(tagSz), Vector#(TExp#(CacheLineWordsSz), Word),Bool,Bool))) memRespQs <- replicateM(mkFIFO);
+	for (Integer i = 0; i < 2; i=i+1 ) begin
+		rule issueBramReq;
+			let r = memReqQs[i].first;
+			memReqQs[i].deq;
+			if ( i == 0 ) mem.portA.request.put(r);
+			else mem.portB.request.put(r);
+		endrule
+	end
+	rule recvBramRespA;
+		let w <- mem.portA.response.get;
+		memRespQs[0].enq(w);
+	endrule
+	rule recvBramRespB;
+		let w <- mem.portB.response.get;
+		memRespQs[1].enq(w);
+	endrule
 
 	Reg#(Bit#(TAdd#(1,cacheRowCntSz))) cacheInitCounter <- mkReg(1<<valueOf(cacheRowCntSz)); 
 	rule initCache(cacheInitCounter > 0 );
-		mem.portB.request.put( BRAMRequest{write:True, responseOnWrite:False, address:truncate(cacheInitCounter), datain:tuple4(?,?, False,False)});
+		//mem.portB.request.put( BRAMRequest{write:True, responseOnWrite:False, address:truncate(cacheInitCounter), datain:tuple4(?,?, False,False)});
+		memReqQs[1].enq(BRAMRequest{write:True, responseOnWrite:False, address:truncate(cacheInitCounter), datain:tuple4(?,?, False,False)});
+
 		cacheInitCounter <= cacheInitCounter - 1;
 	endrule
 
@@ -66,7 +91,9 @@ module mkCacheDirect#(Bool verbose) (CacheIfc#(cacheRowCntSz))
 	FIFO#(MemReq32) cacheReferenceBypassQ <- mkFIFO;
 	FIFO#(Word) cacheReadRespQ <- mkFIFO;
 	rule procCacheReference;
-		let w <- mem.portA.response.get;
+		//let w <- mem.portA.response.get;
+		let w = memRespQs[0].first;
+		memRespQs[0].deq;
 		let r = cacheReferenceBypassQ.first;
 		cacheReferenceBypassQ.deq;
 
@@ -104,7 +131,8 @@ module mkCacheDirect#(Bool verbose) (CacheIfc#(cacheRowCntSz))
 				end
 
 				newline[wid] = wbword;
-				mem.portB.request.put( BRAMRequest{write:True, responseOnWrite:False, address:truncate(r.addr>>valueOf(cacheLineBytesSz)), datain:tuple4(reqTag,newline, True,True)});
+				//mem.portB.request.put( BRAMRequest{write:True, responseOnWrite:False, address:truncate(r.addr>>valueOf(cacheLineBytesSz)), datain:tuple4(reqTag,newline, True,True)});
+				memReqQs[1].enq(BRAMRequest{write:True, responseOnWrite:False, address:truncate(r.addr>>valueOf(cacheLineBytesSz)), datain:tuple4(reqTag,newline, True,True)});
 			end
 		end else begin // cache miss
 			cacheOpOrderQ.enq(tuple5(r.write, False,r.addr, r.word, r.bytes));
@@ -162,10 +190,12 @@ module mkCacheDirect#(Bool verbose) (CacheIfc#(cacheRowCntSz))
 				end
 
 				newline[wid] = wbword;
-				mem.portB.request.put( BRAMRequest{write:True, responseOnWrite:False, address:truncate(raddr>>valueOf(cacheLineBytesSz)), datain:tuple4(reqTag,newline,True,False)});
+				//mem.portB.request.put( BRAMRequest{write:True, responseOnWrite:False, address:truncate(raddr>>valueOf(cacheLineBytesSz)), datain:tuple4(reqTag,newline,True,False)});
+				memReqQs[1].enq( BRAMRequest{write:True, responseOnWrite:False, address:truncate(raddr>>valueOf(cacheLineBytesSz)), datain:tuple4(reqTag,newline,True,False)});
 			end else begin // read from cache
 				//if ( verbose ) $write( "DRAM read word %x\n" , newline[wid]);
-				mem.portB.request.put( BRAMRequest{write:True, responseOnWrite:False, address:truncate(raddr>>valueOf(cacheLineBytesSz)), datain:tuple4(reqTag,newline, True,True)});
+				//mem.portB.request.put( BRAMRequest{write:True, responseOnWrite:False, address:truncate(raddr>>valueOf(cacheLineBytesSz)), datain:tuple4(reqTag,newline, True,True)});
+				memReqQs[1].enq( BRAMRequest{write:True, responseOnWrite:False, address:truncate(raddr>>valueOf(cacheLineBytesSz)), datain:tuple4(reqTag,newline, True,True)});
 				Bit#(8) shoff = zeroExtend(raddr[1:0]);
 				cacheRespQ.enq(newline[wid]>>(shoff*8));
 			end
@@ -190,7 +220,8 @@ module mkCacheDirect#(Bool verbose) (CacheIfc#(cacheRowCntSz))
 		if ( !(stallWrite) ) begin
 			cacheReqQ.deq;
 
-			mem.portA.request.put( BRAMRequest{write:False, responseOnWrite:False, address:cacheoff, datain:?});
+			//mem.portA.request.put( BRAMRequest{write:False, responseOnWrite:False, address:cacheoff, datain:?});
+			memReqQs[0].enq( BRAMRequest{write:False, responseOnWrite:False, address:cacheoff, datain:?});
 			cacheReferenceBypassQ.enq(req);
 			sb.enq(addrhash);
 		end else begin
