@@ -34,7 +34,13 @@ void init() {
 		g_buffers[1][off] = data;
 		off++;
 	}
-
+	/*if ( off*4 < 268435455 ) {
+		uint64_t data = 0;
+		g_buffers[0][off] = data;
+		g_buffers[1][off] = data;
+		off++;
+	}*/
+	printf( "Sent %d bytes done!\n", off*4 );
 	g_initialized = true;
 }
 
