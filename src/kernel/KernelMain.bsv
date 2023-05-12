@@ -50,7 +50,7 @@ module mkKernelMain(KernelMainIfc);
 		MemReq32 req <- processor.dMemReq;
 		//$write( "dMem req %x %d\n", req.addr, req.bytes );
 		caches[1].cacheReq(req);
-		if ( req.addr== 32'hfff && req.write ) begin
+		if ( req.addr == 32'h1fffffff && req.write ) begin
 			$write( "++++\t\t %x\n", req.word );
 		end
 	endrule

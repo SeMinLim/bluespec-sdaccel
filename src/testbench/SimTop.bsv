@@ -73,5 +73,4 @@ module mkSimTop(Empty);
 		endrule
 	end
 
-endmodule
-	
+endmodule	
