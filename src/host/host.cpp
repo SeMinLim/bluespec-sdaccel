@@ -66,11 +66,17 @@ int main(int argc, char* argv[])
 	mem_ext.flags = 0 | XCL_MEM_TOPOLOGY;
 	d_A = clCreateBuffer(context,  CL_MEM_READ_WRITE | CL_MEM_EXT_PTR_XILINX,  data_bytes, &mem_ext, NULL);
 
+	if (!(d_A)) {
+		printf("Error: Failed to allocate device memory A!\n");
+		printf("Test failed\n");
+		return EXIT_FAILURE;
+	}
+
 	mem_ext.flags = 4 | XCL_MEM_TOPOLOGY;
 	d_B = clCreateBuffer(context,  CL_MEM_READ_WRITE | CL_MEM_EXT_PTR_XILINX,  data_bytes, &mem_ext, NULL);
 
-	if (!(d_A&&d_B)) {
-		printf("Error: Failed to allocate device memory!\n");
+	if (!(d_B)) {
+		printf("Error: Failed to allocate device memory B!\n");
 		printf("Test failed\n");
 		return EXIT_FAILURE;
 	}

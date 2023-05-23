@@ -58,11 +58,13 @@ module mkKernelTop (KernelTopIfc);
 	for ( Integer i = 0; i < valueOf(MemPortCnt); i=i+1 ) begin
 		rule relayReadReq00;
 			let r <- kernelMain.mem[i].readReq;
-			axi4mem[i].readReq(r.addr,zeroExtend(r.bytes));
+			if ( i == 0 ) axi4mem[i].readReq(axi4control.mem_addr+r.addr,zeroExtend(r.bytes));
+			else axi4mem[i].readReq(axi4control.file_addr+r.addr,zeroExtend(r.bytes));
 		endrule
 		rule relayWriteReq;
 			let r <- kernelMain.mem[i].writeReq;
-			axi4mem[i].writeReq(r.addr,zeroExtend(r.bytes));
+			if ( i == 0 ) axi4mem[i].writeReq(axi4control.mem_addr+r.addr,zeroExtend(r.bytes));
+			else axi4mem[i].writeReq(axi4control.file_addr+r.addr,zeroExtend(r.bytes));
 		endrule
 		rule relayWriteWord;
 			let r <- kernelMain.mem[i].writeWord;
