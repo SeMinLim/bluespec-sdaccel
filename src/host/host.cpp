@@ -11,6 +11,7 @@ Associated Filename: main.c
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <math.h>
 #include <unistd.h>
@@ -41,29 +42,29 @@ Associated Filename: main.c
 
 int main(int argc, char* argv[])
 {
-	cl_int err;                            // error code returned from api calls
-	cl_context context;                 // compute context
-	cl_command_queue commands;          // compute command queue
-	cl_program program;                 // compute programs
-	cl_kernel kernel;                   // compute kernel
+	cl_int err;				// error code returned from api calls
+	cl_context context;			// compute context
+	cl_command_queue commands;		// compute command queue
+	cl_program program;			// compute programs
+	cl_kernel kernel;			// compute kernel
 	init_setup(0, context, commands, program, kernel);
 
-    int* h_data;                    // host memory for input vector
-	cl_mem d_A;                         // device memory used for a vector
-	int h_B_output[MAX_LENGTH];                   // host memory for output vector
-	cl_mem d_B;                         // device memory used for a vector
+    	int* h_data;				// host memory for input vector
+	cl_mem d_A;				// device memory used for a vector
+	int h_B_output[MAX_LENGTH];		// host memory for output vector
+	cl_mem d_B;				// device memory used for a vector
 
-    // Create structs to define memory bank mapping
-    cl_mem_ext_ptr_t mem_ext;
-    mem_ext.obj = NULL;
-    mem_ext.param = kernel;
+    	// Create structs to define memory bank mapping
+    	cl_mem_ext_ptr_t mem_ext;
+    	mem_ext.obj = NULL;
+    	mem_ext.param = kernel;
     
 
-	const int data_bytes = (256*1024*1024);
+	const uint data_bytes = (256*1024*1024);
 
 	h_data = (int*)malloc(data_bytes);
 
-	mem_ext.flags = 0 | XCL_MEM_TOPOLOGY;
+	mem_ext.flags = 1 | XCL_MEM_TOPOLOGY;
 	d_A = clCreateBuffer(context,  CL_MEM_READ_WRITE | CL_MEM_EXT_PTR_XILINX,  data_bytes, &mem_ext, NULL);
 
 	if (!(d_A)) {
@@ -72,7 +73,7 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	mem_ext.flags = 4 | XCL_MEM_TOPOLOGY;
+	mem_ext.flags = 2 | XCL_MEM_TOPOLOGY;
 	d_B = clCreateBuffer(context,  CL_MEM_READ_WRITE | CL_MEM_EXT_PTR_XILINX,  data_bytes, &mem_ext, NULL);
 
 	if (!(d_B)) {
@@ -97,8 +98,8 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
+
 	// Set the arguments to our compute kernel
-	// int vector_length = MAX_LENGTH;
 	err = 0;
 	cl_uint d_scalar00 = data_bytes/64;
 	err |= clSetKernelArg(kernel, 0, sizeof(cl_uint), &d_scalar00); // Not used in example RTL logic.
@@ -111,21 +112,19 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
+	
 	// Execute the kernel over the entire range of our 1d input data set
 	// using the maximum number of work group items for this device
-
 	printf( "!!!!\n"); fflush(stdout);
-
 	err = clEnqueueTask(commands, kernel, 0, NULL, NULL);
 	if (err) {
 		printf("Error: Failed to execute kernel! %d\n", err);
 		printf("Test failed\n");
 		return EXIT_FAILURE;
 	}
-
 	printf( "2222\n"); fflush(stdout);
+	
 	// Read back the results from the device to verify the output
-	//
 	cl_event readevent;
 	clFinish(commands);
 	printf( "3333\n"); fflush(stdout);
@@ -135,7 +134,6 @@ int main(int argc, char* argv[])
 	err |= clEnqueueReadBuffer( commands, d_A, CL_TRUE, 0, data_bytes, h_B_output, 0, NULL, &readevent );
 
 	printf( "4444\n"); fflush(stdout);
-
 	if (err != CL_SUCCESS) {
 		printf("Error: Failed to read output array! %d\n", err);
 		printf("Test failed\n");
@@ -143,41 +141,26 @@ int main(int argc, char* argv[])
 	}
 	clWaitForEvents(1, &readevent);
 	printf( "5555\n"); fflush(stdout);
+	
 	// Check Results
-
 	for (uint i = 0; i < 20; i++) {
 		printf( "%x \t %x\n", h_data[i], h_B_output[i] );
 	}
-	/*
-	   for (uint i = 0; i < number_of_words; i++) {
-	   if (2*(h_data[i]) != h_B_output[i]) {
-	   printf("ERROR in mkKernelTop - array index %d (host addr 0x%03x) - input=%d (0x%x), output=%d (0x%x)\n", i, i*4, h_data[i], h_data[i], h_B_output[i], h_B_output[i]);
-	   check_status = 1;
-	   }
-	//  printf("i=%d, input=%d, output=%d\n", i,  h_B_input[i], h_B_output[i]);
-	}
-	 */
+    	//--------------------------------------------------------------------------
+    	// Shutdown and cleanup
+    	//-------------------------------------------------------------------------- 
+    	clReleaseMemObject(d_A);
+    	clReleaseMemObject(d_B);
+    	clReleaseProgram(program);
+    	clReleaseKernel(kernel);
+    	clReleaseCommandQueue(commands);
+    	clReleaseContext(context);
 
-    //--------------------------------------------------------------------------
-    // Shutdown and cleanup
-    //-------------------------------------------------------------------------- 
-    clReleaseMemObject(d_A);
-
-    clReleaseMemObject(d_B);
-
-
-    clReleaseProgram(program);
-    clReleaseKernel(kernel);
-    clReleaseCommandQueue(commands);
-    clReleaseContext(context);
-
-    if (false) {
-        printf("INFO: Test failed\n");
-        return EXIT_FAILURE;
-    } else {
-        printf("INFO: Test completed successfully.\n");
-        return EXIT_SUCCESS;
-    }
-
-
-} // end of main
+    	if (false) {
+        	printf("INFO: Test failed\n");
+        	return EXIT_FAILURE;
+    	} else {
+        	printf("INFO: Test completed successfully.\n");
+        	return EXIT_SUCCESS;
+    	}
+}
